@@ -12,9 +12,8 @@ import {
     getDummySig,
     findSigs,
     Utils,
-    slice,
 } from 'scrypt-ts'
-import { EnergyTrading } from '../../src/contracts/EnergyTrading'
+import { energyTrading } from '../../src/contracts/energyTrading'
 import { getDummySigner, getDummyUTXO } from '../utils/txHelper'
 
 use(chaiAsPromised)
@@ -31,11 +30,11 @@ for (let i = 0; i < 3; i++) {
 
 describe('Test SmartContract for Energy Trading Platform', () => {
     before(async () => {
-        await EnergyTrading.compile()
+        await energyTrading.compile()
     })
 
     it('should pass if using right private keys for trade', async () => {
-        const energyTrading = new EnergyTrading(
+        const energyTrading = new energyTrading(
             addresses.map((addr) => {
                 return PubKeyHash(slice(addr.toHex(), 1n)) // Ignore address prefix.
             }) as FixedArray<PubKeyHash, 3>
@@ -54,7 +53,7 @@ describe('Test SmartContract for Energy Trading Platform', () => {
                 {
                     fromUTXO: getDummyUTXO(),
                     pubKeyOrAddrToSign: publicKeys,
-                } as MethodCallOptions<EnergyTrading>
+                } as MethodCallOptions<energyTrading>
             )
 
         const result = callTx.verifyScript(atInputIndex)
@@ -62,7 +61,7 @@ describe('Test SmartContract for Energy Trading Platform', () => {
     })
 
     it('should not pass if using wrong sig for trade', async () => {
-        const energyTradingContract = new EnergyTrading(
+        const energyTradingContract = new energyTrading(
             addresses.map((addr) => {
                 return PubKeyHash(toHex(addr.toHex()))
             }) as FixedArray<PubKeyHash, 3>
@@ -81,7 +80,7 @@ describe('Test SmartContract for Energy Trading Platform', () => {
                 {
                     fromUTXO: getDummyUTXO(),
                     pubKeyOrAddrToSign: publicKeys,
-                } as MethodCallOptions<EnergyTrading>
+                } as MethodCallOptions<energyTrading>
             )
         ).to.be.rejectedWith(/Execution failed/)
     })

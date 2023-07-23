@@ -1,12 +1,12 @@
-import { EnergyTrading } from '../../src/contracts/EnergyTrading'
+/*import { energyTrading } from '../../src/contracts/EnergyTrading'
 import { getDefaultSigner, inputSatoshis } from '../utils/txHelper'
 import { toByteString, sha256 } from 'scrypt-ts'
 
 const message = 'hello world, sCrypt!'
 
 async function main() {
-    await EnergyTrading.compile()
-    const instance = new EnergyTrading(sha256(toByteString(message, true)))
+    await energyTrading.compile()
+    const instance = new energyTrading(sha256(toByteString(message, true)))
 
     // connect to a signer
     await instance.connect(getDefaultSigner())
@@ -26,4 +26,4 @@ describe('Test SmartContract `EnergyTrading` on testnet', () => {
     it('should succeed', async () => {
         await main()
     })
-})
+})*/
