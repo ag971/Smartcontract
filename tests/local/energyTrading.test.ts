@@ -1,87 +1,77 @@
-import { expect, use } from 'chai'
-import chaiAsPromised from 'chai-as-promised'
-import {
-    findSig,
-    MethodCallOptions,
-    PubKey,
-    PubKeyHash,
-    Sig,
-    toHex,
-    bsv,
-    FixedArray,
-    getDummySig,
-    findSigs,
-    Utils,
-} from 'scrypt-ts'
-import { energyTrading } from '../../src/contracts/energyTrading'
-import { getDummySigner, getDummyUTXO } from '../utils/txHelper'
+import { expect, use } from 'chai';
+import { MethodCallOptions, ripemd160, toByteString, PubKey, Sig, getDummySig} from 'scrypt-ts';
+import { EnergyTradingEscrow } from '../../src/contracts/energyTrading';
+import { getDummySigner, getDummyUTXO } from '../utils/txHelper';
+import chaiAsPromised from 'chai-as-promised';
+import crypto from 'crypto';
 
-use(chaiAsPromised)
+use(chaiAsPromised);
 
-const privateKeys: bsv.PrivateKey[] = []
-const publicKeys: bsv.PublicKey[] = []
-const addresses: bsv.Address[] = []
+describe('EnergyTradingEscrow SmartContract', () => {
+    let instance: EnergyTradingEscrow;
 
-for (let i = 0; i < 3; i++) {
-    privateKeys.push(bsv.PrivateKey.fromRandom(bsv.Networks.testnet))
-    publicKeys.push(privateKeys[i].publicKey)
-    addresses.push(privateKeys[i].publicKey.toAddress())
-}
-
-describe('Test SmartContract for Energy Trading Platform', () => {
     before(async () => {
-        await energyTrading.compile()
-    })
+        const sellerPubKeyHash = ripemd160(toByteString('seller-pubkey', true));
+        const buyerPubKeyHash = ripemd160(toByteString('buyer-pubkey', true));
+        const unitPrice = 100n; // Example unitPrice value
 
-    it('should pass if using right private keys for trade', async () => {
-        const energyTrading = new energyTrading(
-            addresses.map((addr) => {
-                return PubKeyHash(slice(addr.toHex(), 1n)) // Ignore address prefix.
-            }) as FixedArray<PubKeyHash, 3>
-        )
+        instance = new EnergyTradingEscrow(sellerPubKeyHash, buyerPubKeyHash, unitPrice);
+        await instance.connect(getDummySigner());
+    });
 
-        // Dummy signer can take an array of signing private keys.
-        await energyTrading.connect(getDummySigner(privateKeys))
+    it('should allow buying energy with valid signature', async () => {
+        // Generate a private key and derive the public key from it
+        const buyerPrivateKey = crypto.randomBytes(32); // Replace this with your preferred method of generating a private key
+        const buyerPublicKey = crypto.createPublicKey(buyerPrivateKey);
 
-        const { tx: callTx, atInputIndex } =
-            await energyTrading.methods.tradeEnergy(
-                // Filter out relevant signatures.
-                // Be vary of the order (https://scrypt.io/docs/how-to-write-a-contract/built-ins#checkmultisig).
-                (sigResps) => findSigs(sigResps, publicKeys),
-                publicKeys.map((publicKey) => PubKey(toHex(publicKey))),
-                // Method call options:
-                {
-                    fromUTXO: getDummyUTXO(),
-                    pubKeyOrAddrToSign: publicKeys,
-                } as MethodCallOptions<energyTrading>
-            )
+        // Sign a message with the private key to create a signature
+        const message = Buffer.from('Buy energy');
+        const sign = crypto.createSign('sha256');
+        sign.update(message);
+        const buyerSignature = sign.sign(buyerPrivateKey);
 
-        const result = callTx.verifyScript(atInputIndex)
-        expect(result.success, result.error).to.eq(true)
-    })
+        // Perform the buyEnergy method call
+        const { tx: callTx, atInputIndex } = await instance.methods.buyEnergy(
+            buyerPublicKey,
+            buyerSignature,
+            {
+                fromUTXO: getDummyUTXO(),
+            } as MethodCallOptions<EnergyTradingEscrow>
+        );
 
-    it('should not pass if using wrong sig for trade', async () => {
-        const energyTradingContract = new energyTrading(
-            addresses.map((addr) => {
-                return PubKeyHash(toHex(addr.toHex()))
-            }) as FixedArray<PubKeyHash, 3>
-        )
+        // Verify the result of the script execution
+        const result = callTx.verifyScript(atInputIndex);
+        expect(result.success, result.error).to.eq(true);
+    });
 
-        await energyTradingContract.connect(getDummySigner(privateKeys))
+    it('should reject buying energy with wrong signature', async () => {
+        // Generate a private key and derive the public key from it
+        const buyerPrivateKey = crypto.randomBytes(32);
+        const buyerPublicKey = crypto.createPublicKey(buyerPrivateKey);
 
-        return expect(
-            energyTradingContract.methods.tradeEnergy(
-                (sigResps) => {
-                    const res = findSigs(sigResps, publicKeys)
-                    res[0] = getDummySig()
-                    return res
-                },
-                publicKeys.map((publicKey) => PubKey(toHex(publicKey))),
-                {
-                    fromUTXO: getDummyUTXO(),
-                    pubKeyOrAddrToSign: publicKeys,
-                } as MethodCallOptions<energyTrading>
-            )
-        ).to.be.rejectedWith(/Execution failed/)
-    })
-})
+        // Generate another private key for wrong signature
+        const wrongPrivateKey = crypto.randomBytes(32);
+        const wrongPublicKey = crypto.createPublicKey(wrongPrivateKey);
+
+        // Sign a message with the wrong private key to create a wrong signature
+        const message = Buffer.from('Buy energy');
+        const sign = crypto.createSign('sha256');
+        sign.update(message);
+        const wrongSignature = sign.sign(wrongPrivateKey);
+
+        // Perform the buyEnergy method call with wrong signature
+        const { tx: callTx, atInputIndex } = await instance.methods.buyEnergy(
+            buyerPublicKey,
+            wrongSignature,
+            {
+                fromUTXO: getDummyUTXO(),
+            } as MethodCallOptions<EnergyTradingEscrow>
+        );
+
+        // Verify that the script execution fails due to invalid signature
+        const result = callTx.verifyScript(atInputIndex);
+        expect(result.success).to.eq(false);
+        expect(result.error).to.include('Signature verification failed');
+    });
+
+});
