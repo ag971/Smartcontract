@@ -47,7 +47,8 @@ export class EnergyTradingEscrow extends SmartContract {
         assert(hash256(outputs) == this.ctx.hashOutputs)
     }
 
-    @method()
+
+@method()
     public depositEnergy(sellerSig: Sig, sellerPubKey: PubKey, energy: bigint) {
         assert(hash160(sellerPubKey) == this.seller)
         assert(this.checkSig(sellerSig, sellerPubKey))
